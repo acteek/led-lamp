@@ -48,7 +48,6 @@ void cyan()
   for (int i = NUM_LEDS - 1; i > 0; i--)
   {
     leds[i] = CRGB::Cyan; //CHSV(127, 255, 255);
-
   }
 }
 
@@ -56,8 +55,8 @@ void blue()
 {
   for (int i = NUM_LEDS - 1; i > 0; i--)
   {
-    leds[i] = CHSV(160, 255, 255);; 
-
+    leds[i] = CHSV(160, 255, 255);
+    ;
   }
 }
 
@@ -65,8 +64,7 @@ void green()
 {
   for (int i = NUM_LEDS - 1; i > 0; i--)
   {
-    leds[i] = CRGB::Green; 
-
+    leds[i] = CRGB::Green;
   }
 }
 
@@ -74,11 +72,9 @@ void yellow()
 {
   for (int i = NUM_LEDS - 1; i > 0; i--)
   {
-    leds[i] = CRGB(45, 255, 255); 
-
+    leds[i] = CRGB(45, 255, 255);
   }
 }
-
 
 SimplePatternList patterns = {rainbow, cyan, blue, green, yellow};
 //--- Stop describe patterns
@@ -98,6 +94,7 @@ void loop()
     switch (command)
     {
     case 99:
+      FastLED.clear();
       isLedOn = !isLedOn;
       break;
     default:
