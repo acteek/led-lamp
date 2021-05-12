@@ -43,7 +43,44 @@ void rainbow()
   fill_rainbow(leds, NUM_LEDS, currentHue, 7);
 }
 
-SimplePatternList patterns = {rainbow};
+void cyan()
+{
+  for (int i = NUM_LEDS - 1; i > 0; i--)
+  {
+    leds[i] = CRGB::Cyan; //CHSV(127, 255, 255);
+
+  }
+}
+
+void blue()
+{
+  for (int i = NUM_LEDS - 1; i > 0; i--)
+  {
+    leds[i] = CHSV(160, 255, 255);; 
+
+  }
+}
+
+void green()
+{
+  for (int i = NUM_LEDS - 1; i > 0; i--)
+  {
+    leds[i] = CRGB::Green; 
+
+  }
+}
+
+void yellow()
+{
+  for (int i = NUM_LEDS - 1; i > 0; i--)
+  {
+    leds[i] = CRGB(45, 255, 255); 
+
+  }
+}
+
+
+SimplePatternList patterns = {rainbow, cyan, blue, green, yellow};
 //--- Stop describe patterns
 
 void loop()
@@ -75,12 +112,11 @@ void loop()
   if (isLedOn)
   {
     // Call the current pattern function once, updating the 'leds' array
-    patterns[currentPatternNumber]();  // delay(300); // delay to parse ir signal
+    patterns[currentPatternNumber](); // delay(300); // delay to parse ir signal
 
     // send the 'leds' array out to the actual LED strip
     FastLED.show();
     FastLED.delay(1000 / FRAMES_PER_SECOND);   // insert a delay to keep the framerate modest
     EVERY_N_MILLISECONDS(20) { currentHue++; } // slowly cycle the "base color" through the rainbow
   }
-
 }
