@@ -9,11 +9,11 @@
 #define LED_TYPE WS2812B
 #define COLOR_ORDER GRB
 #define NUM_LEDS 85
-#define BRIGHTNESS 100
 #define FRAMES_PER_SECOND 120
 
-uint8_t currentHue = 0;                  // color HUE value
-uint8_t currentPatternNumber = 0;        // current pattern index
+uint8_t currentHue = 0;           // color HUE value
+uint8_t currentPatternNumber = 0; // current pattern index
+uint8_t brightness = 100;
 boolean isLedOn = true;                  // lighting led flag
 SoftwareSerial BTSerial(RX_PIN, TX_PIN); // init BT UART port
 CRGB leds[NUM_LEDS];
@@ -25,12 +25,11 @@ void setup()
   pinMode(LED_PIN, OUTPUT);
   Serial.begin(115200);
   BTSerial.begin(9600); // 38400 for setting mode
-  BTSerial.setTimeout(1000);
-  delay(2000); // wait for init UART
+  BTSerial.setTimeout(10);
 
   // init led strip
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
-  FastLED.setBrightness(BRIGHTNESS);
+  FastLED.setBrightness(brightness);
 
   Serial.println("Led has been inited...");
 }
@@ -72,7 +71,8 @@ void yellow()
 {
   for (int i = NUM_LEDS - 1; i > 0; i--)
   {
-    leds[i] = CRGB(45, 255, 255);
+    leds[i] = CRGB::Yellow;
+    ;
   }
 }
 
@@ -81,39 +81,69 @@ SimplePatternList patterns = {rainbow, cyan, blue, green, yellow};
 
 void loop()
 {
-
+  // Parse comand
   if (BTSerial.available())
   {
 
-    int command = BTSerial.parseInt();
+    char buf[50];
+    int num = BTSerial.readBytesUntil(';', buf, 50);
+    buf[num] = NULL;
 
-    String message = "Recieve msg: ";
-    message += command;
-    Serial.println(message);
-
-    switch (command)
+    int comand[10];
+    int count = 0;
+    char *offset = buf;
+    while (true)
     {
-    case 99:
-      FastLED.clear();
+      comand[count++] = atoi(offset);
+      offset = strchr(offset, ',');
+      if (offset)
+        offset++;
+      else
+        break;
+    }
+
+    // Handle comand
+    switch (comand[0])
+    {
+    case 1: // On/Off leds
+      FastLED.clear(true);
       isLedOn = !isLedOn;
+      delay(500);
+      if (isLedOn)
+        Serial.println("Led on ...");
+      else
+        Serial.println("Led off ...");
+      break;
+    case 3: // Set brightness 0-255
+      brightness = comand[1];
+      FastLED.setBrightness(brightness);
+      FastLED.show();
+      Serial.print("Set brightness: ");
+      Serial.println(brightness);
+      break;
+    case 5: // Set Pattern
+      currentPatternNumber = comand[1];
+      Serial.print("Set pattern to: ");
+      Serial.println(currentPatternNumber);
       break;
     default:
-      if (command < sizeof(patterns))
-      {
-        currentPatternNumber = command;
-      }
+      Serial.print("Unknown command: ");
+      for (int i = 0; i < count; i++)
+        Serial.println(comand[i]);
       break;
     }
   }
 
+  // Periodic update, needs for live patterns
   if (isLedOn)
   {
-    // Call the current pattern function once, updating the 'leds' array
-    patterns[currentPatternNumber](); // delay(300); // delay to parse ir signal
-
-    // send the 'leds' array out to the actual LED strip
-    FastLED.show();
-    FastLED.delay(1000 / FRAMES_PER_SECOND);   // insert a delay to keep the framerate modest
-    EVERY_N_MILLISECONDS(20) { currentHue++; } // slowly cycle the "base color" through the rainbow
+    EVERY_N_MILLISECONDS(90)
+    {
+      patterns[currentPatternNumber]();
+      FastLED.delay(1000 / FRAMES_PER_SECOND);
+      FastLED.show();
+      currentHue++;
+      FastLED.show();
+    }
   }
 }
