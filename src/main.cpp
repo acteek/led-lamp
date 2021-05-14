@@ -12,7 +12,7 @@
 #define FRAMES_PER_SECOND 120
 
 uint8_t currentHue = 0;           // color HUE value
-uint8_t currentPatternNumber = 0; // current pattern index
+uint8_t currentPatternNumber = 5; // current pattern index
 uint8_t brightness = 100;
 boolean isLedOn = true;                  // lighting led flag
 SoftwareSerial BTSerial(RX_PIN, TX_PIN); // init BT UART port
@@ -38,7 +38,7 @@ void setup()
 
 void rainbow()
 {
-  // FastLED's built-in rainbow generator
+  currentHue++;
   fill_rainbow(leds, NUM_LEDS, currentHue, 7);
 }
 
@@ -76,7 +76,53 @@ void yellow()
   }
 }
 
-SimplePatternList patterns = {rainbow, cyan, blue, green, yellow};
+// COOLING: How much does the air cool as it rises?
+// Less cooling = taller flames.  More cooling = shorter flames.
+// Default 50, suggested range 20-100 
+#define COOLING  60
+
+// SPARKING: What chance (out of 255) is there that a new spark will be lit?
+// Higher chance = more roaring fire.  Lower chance = more flickery fire.
+// Default 120, suggested range 50-200.
+#define SPARKING 120
+bool gReverseDirection = false;
+
+
+void fire()
+{
+// Array of temperature readings at each simulation cell
+  static uint8_t heat[NUM_LEDS];
+
+  // Step 1.  Cool down every cell a little
+    for( int i = 0; i < NUM_LEDS; i++) {
+      heat[i] = qsub8( heat[i],  random8(0, ((COOLING * 10) / NUM_LEDS) + 2));
+    }
+  
+    // Step 2.  Heat from each cell drifts 'up' and diffuses a little
+    for( int k= NUM_LEDS - 1; k >= 2; k--) {
+      heat[k] = (heat[k - 1] + heat[k - 2] + heat[k - 2] ) / 3;
+    }
+    
+    // Step 3.  Randomly ignite new 'sparks' of heat near the bottom
+    if( random8() < SPARKING ) {
+      int y = random8(7);
+      heat[y] = qadd8( heat[y], random8(160,255) );
+    }
+
+    // Step 4.  Map from heat cells to LED colors
+    for( int j = 0; j < NUM_LEDS; j++) {
+      CRGB color = HeatColor( heat[j]);
+      int pixelnumber;
+      if( gReverseDirection ) {
+        pixelnumber = (NUM_LEDS-1) - j;
+      } else {
+        pixelnumber = j;
+      }
+      leds[pixelnumber] = color;
+    }
+}
+
+SimplePatternList patterns = {rainbow, cyan, blue, green, yellow, fire};
 //--- Stop describe patterns
 
 void loop()
@@ -102,7 +148,7 @@ void loop()
         break;
     }
 
-    // Handle comand
+    // Handle remote comand
     switch (comand[0])
     {
     case 1: // On/Off leds
@@ -137,12 +183,10 @@ void loop()
   // Periodic update, needs for live patterns
   if (isLedOn)
   {
-    EVERY_N_MILLISECONDS(90)
+    EVERY_N_MILLISECONDS(40)
     {
       patterns[currentPatternNumber]();
       FastLED.delay(1000 / FRAMES_PER_SECOND);
-      FastLED.show();
-      currentHue++;
       FastLED.show();
     }
   }
