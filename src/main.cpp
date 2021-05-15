@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <FastLED.h>
 #include <SoftwareSerial.h>
+#include <EEPROM.h>
 
 //Setup
 #define RX_PIN 10
@@ -11,13 +12,17 @@
 #define NUM_LEDS 85
 #define FRAMES_PER_SECOND 120
 
-uint8_t currentHue = 0;           // color HUE value
-uint8_t currentPatternNumber = 5; // current pattern index
-uint8_t brightness = 100;
+uint8_t currentHue = 0;       // color HUE value
+int currentPatternNumber = 5; // current pattern index
+int brightness = 100;
 boolean isLedOn = true;                  // lighting led flag
 SoftwareSerial BTSerial(RX_PIN, TX_PIN); // init BT UART port
 CRGB leds[NUM_LEDS];
 typedef void (*SimplePatternList[])();
+
+//EEPROM bytes offsets
+int addressPat = 0;
+int addressBt = addressPat + sizeof(currentPatternNumber);
 
 void setup()
 {
@@ -26,6 +31,23 @@ void setup()
   Serial.begin(115200);
   BTSerial.begin(9600); // 38400 for setting mode
   BTSerial.setTimeout(10);
+
+  if (EEPROM.read(198) != 20) // fist start
+  {
+    Serial.println("Fist Start");
+    EEPROM.write(198, 20);
+    EEPROM.write(addressPat, currentPatternNumber);
+    EEPROM.write(addressBt, brightness);
+  }
+  else
+  {
+    currentPatternNumber = EEPROM.read(addressPat);
+    brightness = EEPROM.read(addressBt);
+    Serial.print("Restore pattern: ");
+    Serial.println(currentPatternNumber);
+    Serial.print("Restore brightness: ");
+    Serial.println(brightness);
+  }
 
   // init led strip
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
@@ -78,8 +100,8 @@ void yellow()
 
 // COOLING: How much does the air cool as it rises?
 // Less cooling = taller flames.  More cooling = shorter flames.
-// Default 50, suggested range 20-100 
-#define COOLING  60
+// Default 50, suggested range 20-100
+#define COOLING 60
 
 // SPARKING: What chance (out of 255) is there that a new spark will be lit?
 // Higher chance = more roaring fire.  Lower chance = more flickery fire.
@@ -87,39 +109,45 @@ void yellow()
 #define SPARKING 120
 bool gReverseDirection = false;
 
-
 void fire()
 {
-// Array of temperature readings at each simulation cell
+  // Array of temperature readings at each simulation cell
   static uint8_t heat[NUM_LEDS];
 
   // Step 1.  Cool down every cell a little
-    for( int i = 0; i < NUM_LEDS; i++) {
-      heat[i] = qsub8( heat[i],  random8(0, ((COOLING * 10) / NUM_LEDS) + 2));
-    }
-  
-    // Step 2.  Heat from each cell drifts 'up' and diffuses a little
-    for( int k= NUM_LEDS - 1; k >= 2; k--) {
-      heat[k] = (heat[k - 1] + heat[k - 2] + heat[k - 2] ) / 3;
-    }
-    
-    // Step 3.  Randomly ignite new 'sparks' of heat near the bottom
-    if( random8() < SPARKING ) {
-      int y = random8(7);
-      heat[y] = qadd8( heat[y], random8(160,255) );
-    }
+  for (int i = 0; i < NUM_LEDS; i++)
+  {
+    heat[i] = qsub8(heat[i], random8(0, ((COOLING * 10) / NUM_LEDS) + 2));
+  }
 
-    // Step 4.  Map from heat cells to LED colors
-    for( int j = 0; j < NUM_LEDS; j++) {
-      CRGB color = HeatColor( heat[j]);
-      int pixelnumber;
-      if( gReverseDirection ) {
-        pixelnumber = (NUM_LEDS-1) - j;
-      } else {
-        pixelnumber = j;
-      }
-      leds[pixelnumber] = color;
+  // Step 2.  Heat from each cell drifts 'up' and diffuses a little
+  for (int k = NUM_LEDS - 1; k >= 2; k--)
+  {
+    heat[k] = (heat[k - 1] + heat[k - 2] + heat[k - 2]) / 3;
+  }
+
+  // Step 3.  Randomly ignite new 'sparks' of heat near the bottom
+  if (random8() < SPARKING)
+  {
+    int y = random8(7);
+    heat[y] = qadd8(heat[y], random8(160, 255));
+  }
+
+  // Step 4.  Map from heat cells to LED colors
+  for (int j = 0; j < NUM_LEDS; j++)
+  {
+    CRGB color = HeatColor(heat[j]);
+    int pixelnumber;
+    if (gReverseDirection)
+    {
+      pixelnumber = (NUM_LEDS - 1) - j;
     }
+    else
+    {
+      pixelnumber = j;
+    }
+    leds[pixelnumber] = color;
+  }
 }
 
 SimplePatternList patterns = {rainbow, cyan, blue, green, yellow, fire};
@@ -156,26 +184,42 @@ void loop()
       isLedOn = !isLedOn;
       delay(500);
       if (isLedOn)
+      {
         Serial.println("Led on ...");
+        BTSerial.println("Led on ...");
+      }
       else
+      {
         Serial.println("Led off ...");
+        BTSerial.println("Led off ...");
+      }
       break;
     case 3: // Set brightness 0-255
       brightness = comand[1];
+      EEPROM.put(addressBt, brightness);
       FastLED.setBrightness(brightness);
       FastLED.show();
       Serial.print("Set brightness: ");
+      BTSerial.print("Set brightness: ");
       Serial.println(brightness);
+      BTSerial.println(brightness);
       break;
     case 5: // Set Pattern
       currentPatternNumber = comand[1];
+      EEPROM.put(addressPat, currentPatternNumber);
       Serial.print("Set pattern to: ");
+      BTSerial.print("Set pattern to: ");
       Serial.println(currentPatternNumber);
+      BTSerial.println(currentPatternNumber);
       break;
     default:
       Serial.print("Unknown command: ");
+      BTSerial.print("Unknown command: ");
       for (int i = 0; i < count; i++)
+      {
         Serial.println(comand[i]);
+        BTSerial.println(comand[i]);
+      }
       break;
     }
   }
